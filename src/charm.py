@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-# Copyright 2022 Ubuntu
+# Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""Provides Let's Encrypt certificates for namecheap dns provider."""
+"""Retrieves certificates from an ACME server using the namecheap dns provider."""
 
 import logging
 from typing import Optional
@@ -14,10 +14,10 @@ logger = logging.getLogger(__name__)
 
 
 class NamecheapAcmeOperatorCharm(AcmeClient):
-    """Charm the service."""
+    """Main class that is instantiated everytime an event occurs."""
 
     def __init__(self, *args):
-        """Uses the Orc8rBase library to manage events."""
+        """Uses the acme_client library to manage events."""
         super().__init__(*args)
         self._server = "https://acme-staging-v02.api.letsencrypt.org/directory"
 
@@ -67,7 +67,7 @@ class NamecheapAcmeOperatorCharm(AcmeClient):
         return self.model.config.get("namecheap-ttl")
 
     @property
-    def cmd(self):
+    def cmd(self) -> list[str]:
         """Command to run to get the certificate."""
         return [
             "lego",
@@ -86,12 +86,12 @@ class NamecheapAcmeOperatorCharm(AcmeClient):
         ]
 
     @property
-    def certs_path(self):
+    def certs_path(self) -> str:
         """Path to the certificates."""
         return "/tmp/.lego/certificates/"
 
     @property
-    def plugin_config(self):
+    def plugin_config(self) -> dict[str, str]:
         """Plugin specific additional configuration for the command."""
         additional_config = {}
         if self.namecheap_api_user:
@@ -112,6 +112,7 @@ class NamecheapAcmeOperatorCharm(AcmeClient):
             )
         if self.namecheap_http_timeout:
             additional_config.update({"NAMECHEAP_HTTP_TIMEOUT": self.namecheap_http_timeout})
+        return additional_config
 
 
 if __name__ == "__main__":  # pragma: nocover
