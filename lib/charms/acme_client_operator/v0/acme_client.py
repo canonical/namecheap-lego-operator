@@ -1,36 +1,47 @@
 """# acme_client Library.
-This library is designed to enable developers to easily create new charms for implementations of the Acme protocol.
-This library contains all the logic necessary to get certificates from a certificate provider using the acme protocol.
-The constructor takes the following:
-- Reference to the parent charm (CharmBase)
-- The implementation specific command (str)
-- Additional configuration that contains environment variables (dict)
+This library is designed to enable developers to easily create new charms for implementations of the ACME protocol.
+This library contains all the logic necessary to get certificates from an ACME server..
+
 ## Getting Started
-To get started using the library, you just need to fetch the library using `charmcraft`.
+To get started using the library, you need to fetch the library using `charmcraft`.
 ```shell
-cd some-charm
 charmcraft fetch-lib charms.acme_client_operator.v0.acme_client
 ```
-Then, to initialise the library:
+You will also need to add the following library to the charm's `requirements.txt` file:
+- jsonschema
+- cryptography
+
+Then, to use the library in an example charm, you can do the following:
 ```python
 from charms.acme_client_operator.v0.acme_client import AcmeClient
-from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
-from ops.charm import CharmBase
 from ops.main import main
-from charms.tls_certificates_interface.v1.tls_certificates import (  # type: ignore[import]
-    CertificateCreationRequestEvent,
-    TLSCertificatesProvidesV1,
-)
-class ExampleAcmeCharm(CharmBase):
+class ExampleAcmeCharm(AcmeClient):
     def __init__(self, *args):
         super().__init__(*args)
-        self.tls_certificates = TLSCertificatesProvidesV1(self, "certificates")
-        self.framework.observe(
-            self.tls_certificates.on.certificate_creation_request,
-            self._acme_client_operator.on_certificate_creation_request,
-        )
-        lego_cmd = f"lego --email example@email.com --dns namecheap --domains example.com"
-        self._acme_client_operator = AcmeClient(self, lego_cmd, self.additional_config)
+        self._server = "https://acme-staging-v02.api.letsencrypt.org/directory"
+    @property
+    def cmd(self):
+        return [
+            "lego",
+            "--email",
+            self._email,
+            "--accept-tos",
+            "--csr",
+            "/tmp/csr.pem",
+            "--server",
+            self._server,
+            "--dns",
+            "namecheap",
+            "run",
+        ]
+
+    @property
+    def certs_path(self):
+        return "/tmp/.lego/certificates/"
+
+    @property
+    def plugin_config(self):
+        return None
 ```
 Charms that leverage this library also need to specify a `provides` relation in their
 `metadata.yaml` file. For example:
@@ -51,56 +62,50 @@ LIBAPI = 0
 # to 0 if you are raising the major API version
 LIBPATCH = 1
 
-
 import logging
-from typing import Dict
-
+from abc import abstractmethod
 from charms.tls_certificates_interface.v1.tls_certificates import (  # type: ignore[import]
+    TLSCertificatesProvidesV1,
     CertificateCreationRequestEvent,
 )
 from cryptography import x509
 from cryptography.x509.oid import NameOID
 from ops.charm import CharmBase
-from ops.framework import Object
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 from ops.pebble import ExecError
 
 logger = logging.getLogger(__name__)
 
-LEGO_CERTS_PATH = "/tmp/.lego/certificates/"
-class AcmeClient(Object):
-    """TODO"""
 
-    def __init__(
-        self,
-        charm: CharmBase,
-        cmd: str,
-        csr_path: str,
-        additional_config: Dict[str, str] = {},
-    ):
-        super().__init__(charm, None)
-        self._charm = charm
-        self._csr_path = csr_path
-        self._container_name = self.service_name = self._charm.meta.name
-        self._container = self._charm.unit.get_container(self._container_name)
+class AcmeClient(CharmBase):
+    """Base charm for charms that use the ACME protocol to get certificates.
+    This charm implements the tls_certificates interface as a provider."""
+
+    def __init__(self, *args):
+        super().__init__(*args)
+        self._csr_path = "/tmp/csr.pem"
+        self._container_name = self.service_name = self.meta.name
+        self._container = self.unit.get_container(self._container_name)
         service_name_with_underscores = self.service_name.replace("-", "_")
-        self._cmd = cmd
+        self.tls_certificates = TLSCertificatesProvidesV1(self, "certificates")
         pebble_ready_event = getattr(
-            self._charm.on, f"{service_name_with_underscores}_pebble_ready"
+            self.on, f"{service_name_with_underscores}_pebble_ready"
         )
         self.framework.observe(pebble_ready_event, self._on_acme_client_pebble_ready)
-        self._additional_config = additional_config
+        self.framework.observe(
+            self.tls_certificates.on.certificate_creation_request,
+            self._on_certificate_creation_request,
+        )
 
     def _on_acme_client_pebble_ready(self, event):
-        self._charm.unit.status = ActiveStatus()
+        self.unit.status = ActiveStatus()
 
-    def on_certificate_creation_request(self, event: CertificateCreationRequestEvent) -> None:
-        logger.info("Received Certificate Creation Request")
-        if not self._charm.unit.is_leader():
+    def _on_certificate_creation_request(self, event: CertificateCreationRequestEvent) -> None:
+        if not self.unit.is_leader():
             return
 
         if not self._container.can_connect():
-            self._charm.unit.status = WaitingStatus("Waiting for container to be ready")
+            self.unit.status = WaitingStatus("Waiting for container to be ready")
             event.defer()
             return
 
@@ -119,25 +124,24 @@ class AcmeClient(Object):
             path=self._csr_path, make_dirs=True, source=event.certificate_signing_request.encode()
         )
 
-        logger.info("Getting certificate for domain %s", subject)
+        logger.info("Received Certificate Creation Request for domain %s", subject)
         process = self._container.exec(
-            self._cmd, timeout=300, working_dir="/tmp", environment=self._additional_config
+            self.cmd, timeout=300, working_dir="/tmp", environment=self.plugin_config
         )
         try:
             stdout, error = process.wait_output()
             logger.info(f"Return message: {stdout}, {error}")
         except ExecError as e:
-            self._charm.unit.status = BlockedStatus("Error getting certificate. Check logs for details")
+            self.unit.status = BlockedStatus("Error getting certificate. Check logs for details")
             logger.error("Exited with code %d. Stderr:", e.exit_code)
             for line in e.stderr.splitlines():  # type: ignore
                 logger.error("    %s", line)
             return
 
-        chain_pem = self._container.pull(path=f"{LEGO_CERTS_PATH}{subject}.crt")
+        chain_pem = self._container.pull(path=f"{self.certs_path}{subject}.crt")
         certs = []
         for cert in chain_pem.read().split("\n\n"):
             certs.append(cert)
-
         self.tls_certificates.set_relation_certificate(
             certificate=certs[0],
             certificate_signing_request=event.certificate_signing_request,
@@ -145,3 +149,59 @@ class AcmeClient(Object):
             chain=list(reversed(certs)),
             relation_id=event.relation_id,
         )
+
+    @property
+    @abstractmethod
+    def cmd(self) -> list[str]:
+        """Command to run to get the certificate.
+        Implement this method in your charm to return the command that will be used to get the
+        certificate.
+        Example
+        ```
+        @property
+        def cmd(self):
+            return [
+                "lego",
+                "--email",
+                self._email,
+                "--accept-tos",
+                "--csr",
+                "/tmp/csr.pem",
+                "--server",
+                self._server,
+                "--dns",
+                "namecheap",
+                "run",
+            ]
+        ```
+
+        Returns:
+            list[str]: Command and args to run.
+        """
+
+    @property
+    @abstractmethod
+    def certs_path(self) -> str:
+        """Path to the certificates.
+        Implement this method in your charm to return the path to the obtained certificates.
+        Example
+        ```
+        @property
+        def certs_path(self):
+            return "/tmp/.lego/certificates/"
+        ```
+
+        Returns:
+            str: Path to the certificates.
+        """
+
+    @property
+    @abstractmethod
+    def plugin_config(self) -> dict[str, str]:
+        """Plugin specific additional configuration for the command.
+        Implement this method in your charm to return a dictionary with the plugin specific
+        configuration.
+
+        Returns:
+            dict[str, str]: Plugin specific configuration.
+        """

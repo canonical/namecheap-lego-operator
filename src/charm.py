@@ -8,45 +8,18 @@ import logging
 from typing import Optional
 
 from charms.acme_client_operator.v0.acme_client import AcmeClient  # type: ignore[import]
-from charms.tls_certificates_interface.v1.tls_certificates import (  # type: ignore[import]
-    TLSCertificatesProvidesV1,
-)
-from ops.charm import CharmBase
 from ops.main import main
 
 logger = logging.getLogger(__name__)
 
 
-class NamecheapAcmeOperatorCharm(CharmBase):
+class NamecheapAcmeOperatorCharm(AcmeClient):
     """Charm the service."""
 
     def __init__(self, *args):
         """Uses the Orc8rBase library to manage events."""
         super().__init__(*args)
         self._server = "https://acme-staging-v02.api.letsencrypt.org/directory"
-        lego_cmd = [
-            "lego",
-            "--email",
-            self.email,
-            "--accept-tos",
-            "--csr",
-            "/tmp/csr.pem",
-            "--server",
-            self._server,
-            "--dns",
-            "namecheap",
-            "--domains",
-            self.domain,
-            "run",
-        ]
-        self._acme_client_operator = AcmeClient(
-            self, lego_cmd, "/tmp/csr.pem", self.additional_config
-        )
-        self.tls_certificates = TLSCertificatesProvidesV1(self, "certificates")
-        self.framework.observe(
-            self.tls_certificates.on.certificate_creation_request,
-            self._acme_client_operator.on_certificate_creation_request,
-        )
 
     @property
     def email(self) -> Optional[str]:
@@ -94,8 +67,32 @@ class NamecheapAcmeOperatorCharm(CharmBase):
         return self.model.config.get("namecheap-ttl")
 
     @property
-    def additional_config(self):
-        """Returns additional config environment variables."""
+    def cmd(self):
+        """Command to run to get the certificate."""
+        return [
+            "lego",
+            "--email",
+            self.email,
+            "--accept-tos",
+            "--csr",
+            "/tmp/csr.pem",
+            "--server",
+            self._server,
+            "--dns",
+            "namecheap",
+            "--domains",
+            self.domain,
+            "run",
+        ]
+
+    @property
+    def certs_path(self):
+        """Path to the certificates."""
+        return "/tmp/.lego/certificates/"
+
+    @property
+    def plugin_config(self):
+        """Plugin specific additional configuration for the command."""
         additional_config = {}
         if self.namecheap_api_user:
             additional_config["NAMECHEAP_API_USER"] = self.namecheap_api_user
