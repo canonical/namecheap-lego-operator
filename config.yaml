@@ -1,26 +1,26 @@
 options:
   email:
     type: string
+  domain:
+    type: string
   namecheap-api-user:
     type: string
     default:
   namecheap-api-key:
     type: string
     default:
-  domain:
-    type: string
   namecheap-http-timeout:
-    type: str
-    default:
+    type: int
+    default: 60
   namecheap-polling-interval:
-    type: str
-    default:
+    type: int
+    default: 15
   namecheap-propagation-timeout:
-    type: str
-    default:
+    type: int
+    default: 3600
   namecheap-ttl:
-    type: str
-    default:
+    type: int
+    default: 120
   namecheap-sandbox:
     type: bool
     default: false
