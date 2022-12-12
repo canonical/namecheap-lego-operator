@@ -1,26 +1,35 @@
 options:
   email:
     type: string
+    description: Account email address.
   domain:
     type: string
+    description: Domain to request a certificate for.
   namecheap-api-user:
     type: string
     default:
+    description: Namecheap API user
   namecheap-api-key:
     type: string
     default:
+    description: Namecheap API key
   namecheap-http-timeout:
     type: int
     default: 60
+    description: API request timeout in seconds
   namecheap-polling-interval:
     type: int
     default: 15
+    description: Time between DNS propagation checks in seconds
   namecheap-propagation-timeout:
     type: int
     default: 3600
+    description: Maximum waiting time for DNS propagation in seconds
   namecheap-ttl:
     type: int
     default: 120
+    description: The TTL of the TXT record used for the DNS challenge
   namecheap-sandbox:
     type: bool
     default: false
+    description: Activate the sandbox (boolean)
