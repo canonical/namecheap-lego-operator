@@ -18,9 +18,9 @@ APP_NAME = METADATA["name"]
 @pytest.mark.abort_on_fail
 async def test_build_and_deploy(ops_test):
     """Build the charm-under-test and deploy it together with related charms.
+
     Assert on the unit status before any relations/configurations take place.
     """
-    # build and deploy charm from local source folder
     charm = await ops_test.build_charm(".")
     resources = {"lego-image": METADATA["resources"]["lego-image"]["upstream-source"]}
     await ops_test.model.deploy(

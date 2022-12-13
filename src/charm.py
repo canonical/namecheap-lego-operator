@@ -5,7 +5,7 @@
 """Retrieves certificates from an ACME server using the namecheap dns provider."""
 
 import logging
-from typing import Optional
+from typing import Dict, Optional
 
 from charms.acme_client_operator.v0.acme_client import AcmeClient  # type: ignore[import]
 from ops.main import main
@@ -56,7 +56,7 @@ class NamecheapAcmeOperatorCharm(AcmeClient):
         return self.model.config.get("namecheap-sandbox")
 
     @property
-    def _plugin_config(self) -> dict[str, str]:
+    def _plugin_config(self) -> Dict[str, str]:
         """Plugin specific additional configuration for the command."""
         additional_config = {}
         if self._namecheap_api_user:
@@ -78,11 +78,6 @@ class NamecheapAcmeOperatorCharm(AcmeClient):
         if self._namecheap_http_timeout:
             additional_config.update({"NAMECHEAP_HTTP_TIMEOUT": self._namecheap_http_timeout})
         return additional_config
-
-    @property
-    def _domain(self) -> Optional[str]:
-        """Returns domain from config."""
-        return self.model.config.get("domain")
 
     @property
     def _email(self) -> Optional[str]:
