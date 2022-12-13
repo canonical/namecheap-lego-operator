@@ -30,6 +30,6 @@ options:
     default: 120
     description: The TTL of the TXT record used for the DNS challenge
   namecheap-sandbox:
-    type: bool
+    type: boolean
     default: false
     description: Activate the sandbox (boolean)
