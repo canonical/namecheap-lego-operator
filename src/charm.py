@@ -9,6 +9,7 @@ from typing import Dict, Optional
 
 from charms.acme_client_operator.v0.acme_client import AcmeClient  # type: ignore[import]
 from ops.main import main
+from ops.model import ActiveStatus, BlockedStatus
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,8 @@ class NamecheapAcmeOperatorCharm(AcmeClient):
 
     def __init__(self, *args):
         """Uses the acme_client library to manage events."""
-        super().__init__(*args)
+        super().__init__(*args, plugin="namecheap")
+        self.framework.observe(self.on.config_changed, self._on_config_changed)
 
     @property
     def _namecheap_api_key(self) -> Optional[str]:
@@ -79,15 +81,18 @@ class NamecheapAcmeOperatorCharm(AcmeClient):
             additional_config.update({"NAMECHEAP_HTTP_TIMEOUT": self._namecheap_http_timeout})
         return additional_config
 
-    @property
-    def _email(self) -> Optional[str]:
-        """Returns email from config."""
-        return self.model.config.get("email")
-
-    @property
-    def _plugin(self) -> str:
-        """Returns plugin."""
-        return "namecheap"
+    def _on_config_changed(self, _):
+        """Handles config-changed events."""
+        try:
+            self.update_generic_acme_config(
+                email=self.model.config.get("email"),
+                server=self._server,
+            )
+        except ValueError as e:
+            logger.error("Invalid config: %s", e)
+            self.unit.status = BlockedStatus(str(e))
+            return
+        self.unit.status = ActiveStatus()
 
 
 if __name__ == "__main__":  # pragma: nocover
