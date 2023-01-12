@@ -7,11 +7,9 @@ options:
     description: Domain to request a certificate for.
   namecheap-api-user:
     type: string
-    default:
     description: Namecheap API user
   namecheap-api-key:
     type: string
-    default:
     description: Namecheap API key
   namecheap-http-timeout:
     type: int

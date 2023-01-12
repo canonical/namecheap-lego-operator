@@ -23,12 +23,12 @@ class NamecheapAcmeOperatorCharm(AcmeClient):
         self.framework.observe(self.on.config_changed, self._on_config_changed)
 
     @property
-    def _namecheap_api_key(self) -> Optional[str]:
+    def _namecheap_api_key(self) -> str:
         """Returns email from config."""
         return self.model.config.get("namecheap-api-key")
 
     @property
-    def _namecheap_api_user(self) -> Optional[str]:
+    def _namecheap_api_user(self) -> str:
         """Returns email from config."""
         return self.model.config.get("namecheap-api-user")
 
@@ -61,10 +61,8 @@ class NamecheapAcmeOperatorCharm(AcmeClient):
     def _plugin_config(self) -> Dict[str, str]:
         """Plugin specific additional configuration for the command."""
         additional_config = {}
-        if self._namecheap_api_user:
-            additional_config.update({"NAMECHEAP_API_KEY": self._namecheap_api_user})
-        if self._namecheap_api_key:
-            additional_config.update({"NAMECHEAP_API_KEY": self._namecheap_api_key})
+        additional_config.update({"NAMECHEAP_API_KEY": self._namecheap_api_user})
+        additional_config.update({"NAMECHEAP_API_KEY": self._namecheap_api_key})
         if self._namecheap_ttl:
             additional_config.update({"NAMECHEAP_TTL": self._namecheap_ttl})
         if self._namecheap_sandbox:
@@ -83,6 +81,11 @@ class NamecheapAcmeOperatorCharm(AcmeClient):
 
     def _on_config_changed(self, _):
         """Handles config-changed events."""
+        if not self._namecheap_api_key or not self._namecheap_api_user:
+            self.unit.status = BlockedStatus(
+                "namecheap-api-key and namecheap-api-user must be set"
+            )
+            return
         try:
             self.update_generic_acme_config(
                 email=self.model.config.get("email"),
